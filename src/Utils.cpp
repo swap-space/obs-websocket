@@ -123,8 +123,21 @@ obs_sceneitem_t* Utils::GetSceneItemFromName(obs_source_t* source, QString name)
 	struct current_search {
 		QString query;
 		obs_sceneitem_t* result;
+	  QVector<obs_sceneitem_t*> items{};
 	};
 
+	int referenceIdx = 0;
+	int idx = name.lastIndexOf(QString{"$"});
+	  
+	if(idx > 0)
+	{
+	  auto idxString = name.mid(idx+1);
+	  name = name.left(idx);
+	  bool success;
+	  int t = idxString.toInt(&success, 10);
+	  if(success) referenceIdx = t;
+	}
+	
 	current_search search;
 	search.query = name;
 	search.result = nullptr;
@@ -144,13 +157,25 @@ obs_sceneitem_t* Utils::GetSceneItemFromName(obs_source_t* source, QString name)
 			obs_source_get_name(obs_sceneitem_get_source(currentItem));
 
 		if (currentItemName == search->query) {
-			search->result = currentItem;
-			obs_sceneitem_addref(search->result);
-			return false;
+			obs_sceneitem_addref(currentItem);
+			search->items.push_back(currentItem);
 		}
 
 		return true;
 	}, &search);
+
+	if(referenceIdx >= search.items.size())
+	  return nullptr;
+
+	qSort(search.items.begin(), search.items.end(), [](obs_sceneitem_t* a, obs_sceneitem_t* b)
+		  {
+		    return obs_sceneitem_get_id(a) < obs_sceneitem_get_id(b);
+		  });
+
+	search.result = search.items[referenceIdx];
+	for(int i = 0; i < search.items.size(); ++i)
+	  if(i != referenceIdx)
+	    obs_sceneitem_release(search.items[i]);
 
 	return search.result;
 }
